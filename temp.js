@@ -1,0 +1,1 @@
+supabase gen types typescript --project-id=kfktzpdexagrkylcxfhj --schema=storage,public > supabase/functions/hf-image-captioning/types.ts
