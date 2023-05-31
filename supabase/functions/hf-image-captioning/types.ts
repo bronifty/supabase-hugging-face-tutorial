@@ -13,17 +13,20 @@ export interface Database {
         Row: {
           caption: string | null
           created_at: string | null
-          id: string
+          object_id: string
+          surrogate_key_id: number
         }
         Insert: {
           caption?: string | null
           created_at?: string | null
-          id: string
+          object_id: string
+          surrogate_key_id?: number
         }
         Update: {
           caption?: string | null
           created_at?: string | null
-          id?: string
+          object_id?: string
+          surrogate_key_id?: number
         }
       }
     }

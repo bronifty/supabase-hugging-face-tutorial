@@ -1,45 +1,68 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { HfInference } from "https://esm.sh/@huggingface/inference";
-// import {
-//   createRepo,
-//   commit,
-//   deleteRepo,
-//   listFiles,
-// } from "https://esm.sh/@huggingface/hub";
+import { HfInference } from "https://esm.sh/@huggingface/inference@2.3.2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Database } from "./types.ts";
 
-// const HUGGINGFACE_ACCESS_TOKEN = "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";
-// const hf = new HfInference(Deno.env.get("HUGGINGFACE_ACCESS_TOKEN"));
+// console.log("Hello from `hf-image-captioning` function!");
+
+const hf = new HfInference(Deno.env.get("HUGGINGFACE_ACCESS_TOKEN"));
+
+type storageObjectRecord = Database["storage"]["Tables"]["objects"]["Row"];
+interface WebhookPayload {
+  type: "INSERT" | "UPDATE" | "DELETE";
+  table: string;
+  record: storageObjectRecord;
+  schema: "public";
+  old_record: null | storageObjectRecord;
+}
+
 serve(async (req) => {
-  const inference = new HfInference(Deno.env.get("HUGGINGFACE_ACCESS_TOKEN"));
-  // translation_text
-  // const { translation_text } = await inference.translation({
-  //   model: "t5-base",
-  //   inputs: "My name is Nathan and I live in Johnson City",
-  // });
-  // console.log(translation_text);
+  const payload: WebhookPayload = await req.json();
+  // console.log("payload: ", payload);
+  const storageObjectRecord = payload.record;
+  const supabaseAdminClient = createClient<Database>(
+    // Supabase API URL - env var exported by default when deployed.
+    Deno.env.get("SUPABASE_URL") ?? "",
+    // Supabase API SERVICE ROLE KEY - env var exported by default when deployed.
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
 
-  // image to text
-  const { generated_text } = await inference.imageToText({
-    data: await (await fetch("https://picsum.photos/300/300")).blob(),
+  const { data, error } = await supabaseAdminClient.storage
+    .from(storageObjectRecord.bucket_id!)
+    .createSignedUrl(storageObjectRecord.path_tokens!.join("/"), 60);
+  if (error) throw error;
+  // console.log("data: ", data);
+  const { signedUrl } = data;
+
+  const imgDesc = await hf.imageToText({
+    data: await (await fetch(signedUrl)).blob(),
     model: "nlpconnect/vit-gpt2-image-captioning",
   });
-  console.log(generated_text);
-  const data = {
-    generated_text,
-  };
+  // console.log("imgDesc: ", imgDesc);
+
+  const { data: insertData, error: insertError } = await supabaseAdminClient
+    .from("image_caption")
+    .insert({
+      object_id: storageObjectRecord.id!,
+      caption: imgDesc.generated_text,
+    })
+    .throwOnError();
+
+  // const { generated_text } = await inference.imageToText({
+  //   data: await (await fetch("https://picsum.photos/300/300")).blob(),
+  //   model: "nlpconnect/vit-gpt2-image-captioning",
+  // });
+  // console.log(generated_text);
+  // const data = {
+  //   generated_text,
+  // };
 
   // hello world example
   // const { name } = await req.json();
   // const data = {
-  //   message: `Hello ${name}!`,
+  //   message: payload,
   // };
-  return new Response(JSON.stringify(data), {
-    headers: { "Content-Type": "application/json" },
-  });
+  return new Response("ok");
 });
 
 // To invoke:
