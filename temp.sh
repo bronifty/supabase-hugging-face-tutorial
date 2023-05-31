@@ -11,4 +11,4 @@ Started supabase local development setup.
     Inbucket URL: http://localhost:54324
       JWT secret: super-secret-jwt-token-with-at-least-32-characters-long
         anon key: eyy
-service_role key: eyy
+service_role key: eyy123
